@@ -1,4 +1,3 @@
-````md
 # Alumni Bridge Frontend
 
 A modern React + Vite frontend application for the Alumni Bridge platform that connects students, alumni, and colleges through mentorship, networking, discussions, jobs, events, and real-time communication.
@@ -45,35 +44,10 @@ A modern React + Vite frontend application for the Alumni Bridge platform that c
 frontend/
 │
 ├── components/
-│   ├── Navbar.jsx
-│   ├── ProtectedRoute.jsx
-│   └── ToastContainer.jsx
-│
 ├── hooks/
-│   └── useSocket.js
-│
 ├── pages/
-│   ├── auth/
-│   ├── student/
-│   ├── alumni/
-│   ├── college/
-│   ├── ChatPage.jsx
-│   ├── Discussions.jsx
-│   ├── DiscussionDetail.jsx
-│   ├── Jobs.jsx
-│   ├── Events.jsx
-│   └── Profile.jsx
-│
 ├── services/
-│   └── api.js
-│
 ├── store/
-│   ├── index.js
-│   └── slices/
-│       ├── authSlice.js
-│       ├── notificationSlice.js
-│       └── toastSlice.js
-│
 ├── App.jsx
 ├── main.jsx
 ├── index.css
@@ -81,7 +55,7 @@ frontend/
 ├── vite.config.js
 ├── vercel.json
 └── package.json
-````
+```
 
 ---
 
@@ -93,15 +67,11 @@ frontend/
 git clone https://github.com/your-username/alumni-bridge-frontend.git
 ```
 
----
-
 ## Navigate To Project
 
 ```bash
 cd alumni-bridge-frontend
 ```
-
----
 
 ## Install Dependencies
 
@@ -113,7 +83,7 @@ npm install
 
 # Environment Variables
 
-Create a `.env` file in the project root.
+Create a `.env` file in the root directory.
 
 ```env
 VITE_API_URL=https://alumni-bridge-backend.onrender.com/api
@@ -156,11 +126,11 @@ npm run preview
 
 ## Build Settings
 
-| Setting          | Value         |
-| ---------------- | ------------- |
-| Framework Preset | Vite          |
-| Build Command    | npm run build |
-| Output Directory | dist          |
+| Setting | Value |
+|---|---|
+| Framework Preset | Vite |
+| Build Command | npm run build |
+| Output Directory | dist |
 
 ---
 
@@ -188,51 +158,41 @@ This prevents 404 errors during page refresh while using React Router.
 
 ## Authentication
 
-* `/login`
-* `/register`
-* `/forgot-password`
-
----
+- `/login`
+- `/register`
+- `/forgot-password`
 
 ## Student Routes
 
-* `/dashboard`
-* `/mentors`
-* `/mentors/:id`
-* `/mentorship`
-* `/ai`
-
----
+- `/dashboard`
+- `/mentors`
+- `/mentors/:id`
+- `/mentorship`
+- `/ai`
 
 ## Alumni Routes
 
-* `/alumni/dashboard`
-* `/alumni/mentor`
-* `/alumni/requests`
-
----
+- `/alumni/dashboard`
+- `/alumni/mentor`
+- `/alumni/requests`
 
 ## College Routes
 
-* `/college/dashboard`
-* `/college/approvals`
-
----
+- `/college/dashboard`
+- `/college/approvals`
 
 ## Shared Routes
 
-* `/chat`
-* `/discussions`
-* `/discussions/:id`
-* `/jobs`
-* `/events`
-* `/profile`
+- `/chat`
+- `/discussions`
+- `/discussions/:id`
+- `/jobs`
+- `/events`
+- `/profile`
 
 ---
 
 # API Integration
-
-The frontend communicates with the backend API hosted on Render.
 
 Backend URL:
 
@@ -246,11 +206,11 @@ https://alumni-bridge-backend.onrender.com
 
 Real-time features include:
 
-* Live Chat
-* Notifications
-* Real-Time Updates
+- Live Chat
+- Notifications
+- Real-Time Updates
 
-Socket connection is handled using:
+Socket connection handled using:
 
 ```bash
 hooks/useSocket.js
@@ -262,9 +222,9 @@ hooks/useSocket.js
 
 Authentication uses:
 
-* JWT Tokens
-* Protected Routes
-* Role-Based Access Control
+- JWT Tokens
+- Protected Routes
+- Role-Based Access Control
 
 ---
 
@@ -272,9 +232,9 @@ Authentication uses:
 
 Redux Toolkit is used for:
 
-* Authentication State
-* Notifications
-* Toast Messages
+- Authentication State
+- Notifications
+- Toast Messages
 
 ---
 
@@ -293,6 +253,3 @@ Nitin Kumar
 # License
 
 This project is developed for educational and project purposes.
-
-```
-```
