@@ -8,7 +8,7 @@ import {
 
 const features = [
   { icon: UsersRound, title: 'Find trusted mentors', text: 'Learn from alumni who understand your path.' },
-  { icon: BriefcaseBusiness, title: 'Discover opportunities', text: 'Find jobs and internships through your network.' },
+  { icon: BriefcaseBusiness, title: 'Discover jobs & internships', text: 'Find opportunities through your network.' },
   { icon: MessageCircleMore, title: 'Join alumni discussions', text: 'Turn introductions into meaningful conversations.' },
   { icon: Network, title: 'Grow your network', text: 'Build relationships that last beyond graduation.' },
 ];
