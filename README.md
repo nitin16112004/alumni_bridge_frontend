@@ -90,6 +90,11 @@ VITE_API_URL=https://alumni-bridge-backend.onrender.com/api
 VITE_SOCKET_URL=https://alumni-bridge-backend.onrender.com
 ```
 
+These are public service URLs, not secrets. The API URL must include exactly one
+`/api` suffix; the Socket.IO URL must not include `/api`. Production builds use
+these Render URLs as safe defaults if Vercel variables are missing. Changing a
+Vercel environment variable requires a new deployment before it reaches the app.
+
 ---
 
 # Run Development Server
@@ -131,6 +136,14 @@ npm run preview
 | Framework Preset | Vite |
 | Build Command | npm run build |
 | Output Directory | dist |
+
+Configure these values for Production (and Preview when preview deployments need
+backend access), then redeploy:
+
+```env
+VITE_API_URL=https://alumni-bridge-backend.onrender.com/api
+VITE_SOCKET_URL=https://alumni-bridge-backend.onrender.com
+```
 
 ---
 

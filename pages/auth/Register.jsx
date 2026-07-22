@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { registerUser, registerCollege, clearError } from '../../store/slices/authSlice';
@@ -9,6 +9,9 @@ export default function Register() {
   const navigate = useNavigate();
   const { loading, error } = useSelector((s) => s.auth);
   const [colleges, setColleges] = useState([]);
+  const [collegeError, setCollegeError] = useState('');
+  const [validationError, setValidationError] = useState('');
+  const submittingRef = useRef(false);
 
   const [form, setForm] = useState({
     entityType: 'student',
@@ -21,31 +24,55 @@ export default function Register() {
   });
 
   useEffect(() => {
-    api.get('/colleges').then((r) => setColleges(r.data)).catch(() => {});
+    api.get('/colleges')
+      .then((r) => setColleges(r.data))
+      .catch(() => setCollegeError('Colleges could not be loaded. You can still create a college account.'));
   }, []);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setValidationError('');
+    if (error) dispatch(clearError());
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading || submittingRef.current) return;
     dispatch(clearError());
+    setValidationError('');
 
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+    if (!name) return setValidationError(form.entityType === 'college' ? 'Institution name is required' : 'Full name is required');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setValidationError('Enter a valid email address');
+    if (form.password.length < 6) return setValidationError('Password must be at least 6 characters');
+
+    submittingRef.current = true;
     let result;
-    if (form.entityType === 'college') {
-      result = await dispatch(registerCollege({ name: form.name, email: form.email, password: form.password, domain: form.domain }));
-      if (registerCollege.fulfilled.match(result)) navigate('/college/dashboard');
-    } else {
-      result = await dispatch(registerUser({
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        role: form.entityType,
-        collegeId: form.collegeId || undefined,
-        graduationYear: form.entityType === 'alumni' ? Number(form.graduationYear) : undefined,
-      }));
-      if (registerUser.fulfilled.match(result)) {
-        navigate(form.entityType === 'alumni' ? '/alumni/dashboard' : '/dashboard');
+    try {
+      if (form.entityType === 'college') {
+        result = await dispatch(registerCollege({
+          name,
+          email,
+          password: form.password,
+          domain: form.domain.trim().toLowerCase(),
+        }));
+        if (registerCollege.fulfilled.match(result)) navigate('/college/dashboard');
+      } else {
+        result = await dispatch(registerUser({
+          name,
+          email,
+          password: form.password,
+          role: form.entityType,
+          collegeId: form.collegeId || undefined,
+          graduationYear: form.entityType === 'alumni' ? Number(form.graduationYear) : undefined,
+        }));
+        if (registerUser.fulfilled.match(result)) {
+          navigate(form.entityType === 'alumni' ? '/alumni/dashboard' : '/dashboard');
+        }
       }
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -143,6 +170,7 @@ export default function Register() {
                   <option key={c._id} value={c._id}>{c.name}</option>
                 ))}
               </select>
+              {collegeError && <p className="text-amber-600 text-xs mt-1">{collegeError}</p>}
             </div>
           )}
 
@@ -162,9 +190,9 @@ export default function Register() {
             </div>
           )}
 
-          {error && (
+          {(validationError || error) && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">
-              {error}
+              {validationError || error}
             </div>
           )}
 

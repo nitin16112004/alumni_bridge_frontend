@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { useDispatch, useSelector } from 'react-redux';
 import { addNotification } from '../store/slices/notificationSlice';
 import { addToast } from '../store/slices/toastSlice';
+import { SOCKET_URL } from '../config/runtime';
 
 export const useSocket = () => {
   const { token } = useSelector((state) => state.auth);
@@ -12,7 +13,7 @@ export const useSocket = () => {
   useEffect(() => {
     if (!token) return;
 
-    socketRef.current = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
+    socketRef.current = io(SOCKET_URL, {
       auth: { token },
       transports: ['polling', 'websocket'],
       reconnectionAttempts: 5,

@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
 
 export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
   try {
@@ -9,7 +10,7 @@ export const login = createAsyncThunk('auth/login', async (credentials, { reject
     localStorage.setItem('user', JSON.stringify({ ...entity, entityType: data.entityType }));
     return { ...data, entity };
   } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Login failed');
+    return rejectWithValue(getApiErrorMessage(err, 'Login failed'));
   }
 });
 
@@ -20,18 +21,19 @@ export const registerUser = createAsyncThunk('auth/register', async (data, { rej
     localStorage.setItem('user', JSON.stringify({ ...res.data.user, entityType: 'user' }));
     return res.data;
   } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Registration failed');
+    return rejectWithValue(getApiErrorMessage(err, 'Registration failed'));
   }
 });
 
 export const registerCollege = createAsyncThunk('auth/registerCollege', async (data, { rejectWithValue }) => {
   try {
     const res = await api.post('/auth/register-college', data);
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('user', JSON.stringify({ ...res.data.college, entityType: 'college' }));
-    return res.data;
+    const normalizedResponse = { ...res.data, entityType: res.data.entityType || 'college' };
+    localStorage.setItem('token', normalizedResponse.token);
+    localStorage.setItem('user', JSON.stringify({ ...normalizedResponse.college, entityType: 'college' }));
+    return normalizedResponse;
   } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Registration failed');
+    return rejectWithValue(getApiErrorMessage(err, 'Registration failed'));
   }
 });
 

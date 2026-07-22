@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import api from '../../services/api';
@@ -6,17 +6,17 @@ import { Search, Building2, Star } from 'lucide-react';
 
 export default function MentorList() {
   const { user } = useSelector((s) => s.auth);
+  const collegeId = user?.collegeId;
   const [mentors, setMentors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ expertise: '', company: '' });
 
-  const fetchMentors = async () => {
-    setLoading(true);
+  const fetchMentors = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (filters.expertise) params.append('expertise', filters.expertise);
       if (filters.company) params.append('company', filters.company);
-      if (user?.collegeId) params.append('collegeId', user.collegeId);
+      if (collegeId) params.append('collegeId', collegeId);
       const { data } = await api.get(`/mentors?${params}`);
       setMentors(data);
     } catch {
@@ -24,9 +24,17 @@ export default function MentorList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, collegeId]);
 
-  useEffect(() => { fetchMentors(); }, [filters]);
+  useEffect(() => {
+    const task = setTimeout(fetchMentors, 0);
+    return () => clearTimeout(task);
+  }, [fetchMentors]);
+
+  const updateFilter = (key, value) => {
+    setLoading(true);
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -41,7 +49,7 @@ export default function MentorList() {
           <input
             placeholder="Filter by expertise (e.g. Machine Learning)"
             value={filters.expertise}
-            onChange={(e) => setFilters({ ...filters, expertise: e.target.value })}
+            onChange={(e) => updateFilter('expertise', e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
@@ -50,7 +58,7 @@ export default function MentorList() {
           <input
             placeholder="Filter by company"
             value={filters.company}
-            onChange={(e) => setFilters({ ...filters, company: e.target.value })}
+            onChange={(e) => updateFilter('company', e.target.value)}
             className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>

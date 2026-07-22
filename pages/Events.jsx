@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import api from '../services/api';
-import { CalendarDays, MapPin, Plus, X, Users, CheckCircle, ChevronRight, Clock } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, X, Users, CheckCircle, ChevronRight } from 'lucide-react';
 
 function EventModal({ event, user, onClose, onRegister, registering }) {
   if (!event) return null;
