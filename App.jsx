@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store/index';
 import { useSelector } from 'react-redux';
@@ -28,19 +28,22 @@ import Jobs from './pages/Jobs';
 import Events from './pages/Events';
 import Profile from './pages/Profile';
 
-function AppContent() {
+function RouterContent() {
   useSocket();
   const { user } = useSelector((s) => s.auth);
+  const { pathname } = useLocation();
   const isCollege = user?.entityType === 'college';
+  const isAuthRoute = ['/login', '/register', '/forgot-password', '/reset-password'].includes(pathname);
 
   return (
-    <BrowserRouter>
-      <Navbar />
+    <>
+      {!isAuthRoute && <Navbar />}
       <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ForgotPassword />} />
 
         <Route path="/" element={
           user
@@ -70,6 +73,14 @@ function AppContent() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+    </>
+  );
+}
+
+function AppContent() {
+  return (
+    <BrowserRouter>
+      <RouterContent />
     </BrowserRouter>
   );
 }

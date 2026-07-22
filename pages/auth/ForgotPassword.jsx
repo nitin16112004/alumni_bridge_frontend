@@ -1,25 +1,35 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { KeyRound, Mail } from 'lucide-react';
 import api from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
+import AuthLayout from '../../components/auth/AuthLayout';
+import Alert from '../../components/ui/Alert';
+import FormField from '../../components/ui/FormField';
+import PasswordField from '../../components/ui/PasswordField';
+import SubmitButton from '../../components/ui/SubmitButton';
 
 export default function ForgotPassword() {
-  const [step, setStep] = useState(1); // 1=email, 2=otp+newpass
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({ email: '', otp: '', newPassword: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setError('');
+  };
 
   const sendOtp = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      await api.post('/auth/forgot-password', { email: form.email });
+      await api.post('/auth/forgot-password', { email: form.email.trim().toLowerCase() });
       setStep(2);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to send OTP');
+      setError(getApiErrorMessage(err, 'Failed to send the reset code.'));
     } finally {
       setLoading(false);
     }
@@ -33,106 +43,90 @@ export default function ForgotPassword() {
     setError('');
     try {
       await api.post('/auth/reset-password', {
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
         otp: form.otp,
         newPassword: form.newPassword,
       });
-      setSuccess('Password reset! You can now sign in.');
+      setSuccess('Password reset successfully. You can now sign in.');
     } catch (err) {
-      setError(err.response?.data?.message || 'Reset failed');
+      setError(getApiErrorMessage(err, 'Unable to reset your password.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">AB</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Reset Password</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {step === 1 ? "We'll send an OTP to your email" : `OTP sent to ${form.email}`}
+    <AuthLayout>
+      <div className="space-y-7">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-blue-600">Account recovery</p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Reset your password</h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">
+            {step === 1 ? 'We’ll send a one-time code to your account email.' : `Enter the code sent to ${form.email}.`}
           </p>
-        </div>
+        </header>
 
         {success ? (
-          <div className="text-center space-y-4">
-            <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm">{success}</div>
-            <Link to="/login" className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors text-center">
-              Back to Sign In
-            </Link>
+          <div className="space-y-4">
+            <Alert variant="success">{success}</Alert>
+            <Link to="/login" className="flex h-[52px] items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">Back to sign in</Link>
           </div>
         ) : step === 1 ? (
-          <form onSubmit={sendOtp} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="you@example.com"
-              />
-            </div>
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">{error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50">
-              {loading ? 'Sending OTP...' : 'Send OTP'}
-            </button>
-            <Link to="/login" className="block text-center text-sm text-gray-500 hover:text-blue-600">Back to Sign In</Link>
+          <form onSubmit={sendOtp} className="space-y-5">
+            <FormField
+              label="Email address"
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              required
+              icon={Mail}
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
+            {error && <Alert>{error}</Alert>}
+            <SubmitButton loading={loading} loadingLabel="Sending code...">Send reset code</SubmitButton>
+            <Link to="/login" className="block text-center text-sm font-semibold text-slate-500 transition hover:text-blue-600">Back to sign in</Link>
           </form>
         ) : (
-          <form onSubmit={resetPassword} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">OTP Code</label>
-              <input
-                name="otp"
-                value={form.otp}
-                onChange={handleChange}
-                required
-                maxLength={6}
-                placeholder="6-digit code"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none tracking-widest text-center text-lg font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-              <input
-                type="password"
-                name="newPassword"
-                value={form.newPassword}
-                onChange={handleChange}
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="••••••••"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-              <input
-                type="password"
-                name="confirm"
-                value={form.confirm}
-                onChange={handleChange}
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="••••••••"
-              />
-            </div>
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">{error}</div>}
-            <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50">
-              {loading ? 'Resetting...' : 'Reset Password'}
-            </button>
-            <button type="button" onClick={() => { setStep(1); setError(''); }} className="block w-full text-center text-sm text-gray-500 hover:text-blue-600">
-              Resend OTP
-            </button>
+          <form onSubmit={resetPassword} className="space-y-5">
+            <FormField
+              label="One-time code"
+              name="otp"
+              value={form.otp}
+              onChange={handleChange}
+              required
+              maxLength={6}
+              icon={KeyRound}
+              inputMode="numeric"
+              placeholder="Enter the 6-digit code"
+              className="tracking-[0.3em]"
+            />
+            <PasswordField
+              label="New password"
+              name="newPassword"
+              value={form.newPassword}
+              onChange={handleChange}
+              required
+              minLength={6}
+              autoComplete="new-password"
+              placeholder="At least 6 characters"
+            />
+            <PasswordField
+              label="Confirm password"
+              name="confirm"
+              value={form.confirm}
+              onChange={handleChange}
+              required
+              autoComplete="new-password"
+              placeholder="Repeat your password"
+            />
+            {error && <Alert>{error}</Alert>}
+            <SubmitButton loading={loading} loadingLabel="Resetting password...">Reset password</SubmitButton>
+            <button type="button" onClick={() => { setStep(1); setError(''); }} className="block w-full text-center text-sm font-semibold text-slate-500 transition hover:text-blue-600">Use a different email</button>
           </form>
         )}
       </div>
-    </div>
+    </AuthLayout>
   );
 }

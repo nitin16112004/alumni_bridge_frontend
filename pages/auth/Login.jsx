@@ -1,21 +1,30 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { Mail } from 'lucide-react';
 import { login, clearError } from '../../store/slices/authSlice';
+import AuthLayout from '../../components/auth/AuthLayout';
+import Alert from '../../components/ui/Alert';
+import FormField from '../../components/ui/FormField';
+import PasswordField from '../../components/ui/PasswordField';
+import SubmitButton from '../../components/ui/SubmitButton';
 
 export default function Login() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loading, error } = useSelector((s) => s.auth);
-
   const [form, setForm] = useState({ email: '', password: '' });
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    if (error) dispatch(clearError());
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     dispatch(clearError());
-    const result = await dispatch(login(form));
+    const result = await dispatch(login({ ...form, email: form.email.trim().toLowerCase() }));
     if (login.fulfilled.match(result)) {
       const role = result.payload.entityType === 'college' ? 'college' : result.payload.entity?.role;
       if (role === 'college') navigate('/college/dashboard');
@@ -25,68 +34,49 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-2xl">AB</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-          <p className="text-gray-500 text-sm mt-1">Sign in to Alumni Bridge</p>
-        </div>
+    <AuthLayout>
+      <div className="space-y-7">
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.17em] text-blue-600">Welcome back</p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">Sign in to your community</h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">Pick up where you left off with the people and opportunities that matter.</p>
+        </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              placeholder="••••••••"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <FormField
+            label="Email address"
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+            icon={Mail}
+            autoComplete="email"
+            placeholder="you@example.com"
+          />
+          <PasswordField
+            label="Password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            required
+            autoComplete="current-password"
+            placeholder="Your password"
+          />
 
           <div className="flex justify-end">
-            <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">Forgot password?</Link>
+            <Link to="/forgot-password" className="text-sm font-semibold text-blue-600 transition hover:text-blue-700 hover:underline">Forgot password?</Link>
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+          {error && <Alert>{error}</Alert>}
+          <SubmitButton loading={loading} loadingLabel="Signing in...">Sign in</SubmitButton>
         </form>
 
-        <p className="text-center text-sm text-gray-600 mt-6">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline font-medium">
-            Sign up
-          </Link>
+        <p className="text-center text-sm text-slate-500">
+          Don&apos;t have an account?{' '}
+          <Link to="/register" className="font-semibold text-blue-600 transition hover:text-blue-700 hover:underline">Create one</Link>
         </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
