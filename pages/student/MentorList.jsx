@@ -1,113 +1,157 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Building2,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  UsersRound,
+  X,
+} from 'lucide-react';
+import { useState } from 'react';
 import { useSelector } from 'react-redux';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { Search, Building2, Star } from 'lucide-react';
+import useApiResource from '../../hooks/useApiResource';
+import useDebouncedValue from '../../hooks/useDebouncedValue';
+import PageHeader from '../../components/common/PageHeader';
+import Avatar from '../../components/ui/Avatar';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import ErrorState from '../../components/ui/ErrorState';
+import Skeleton from '../../components/ui/Skeleton';
 
 export default function MentorList() {
-  const { user } = useSelector((s) => s.auth);
-  const [mentors, setMentors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ expertise: '', company: '' });
+  const { user } = useSelector((state) => state.auth);
+  const collegeId = typeof user?.collegeId === 'object' ? user.collegeId?._id : user?.collegeId;
+  const [expertise, setExpertise] = useState('');
+  const [company, setCompany] = useState('');
+  const [availability, setAvailability] = useState('available');
+  const debouncedExpertise = useDebouncedValue(expertise);
+  const debouncedCompany = useDebouncedValue(company);
 
-  const fetchMentors = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filters.expertise) params.append('expertise', filters.expertise);
-      if (filters.company) params.append('company', filters.company);
-      if (user?.collegeId) params.append('collegeId', user.collegeId);
-      const { data } = await api.get(`/mentors?${params}`);
-      setMentors(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+  const { data: mentors = [], loading, error, retry } = useApiResource(async () => {
+    const { data } = await api.get('/mentors', {
+      params: {
+        ...(collegeId ? { collegeId } : {}),
+        ...(debouncedExpertise.trim() ? { expertise: debouncedExpertise.trim() } : {}),
+        ...(debouncedCompany.trim() ? { company: debouncedCompany.trim() } : {}),
+      },
+    });
+    if (availability === 'available') return data.filter((mentor) => mentor.availability);
+    if (availability === 'unavailable') return data.filter((mentor) => !mentor.availability);
+    return data;
+  }, [collegeId, debouncedExpertise, debouncedCompany, availability]);
+
+  const hasFilters = expertise || company || availability !== 'available';
+  const clearFilters = () => {
+    setExpertise('');
+    setCompany('');
+    setAvailability('available');
   };
 
-  useEffect(() => { fetchMentors(); }, [filters]);
-
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Find a Mentor</h1>
-        <p className="text-gray-500 text-sm mt-1">Connect with verified alumni from your college</p>
-      </div>
+    <div className="page-container">
+      <PageHeader
+        eyebrow="Mentor discovery"
+        title="Find the right alumni mentor"
+        description="Search verified alumni from your college by expertise, company, and current availability."
+        actions={hasFilters && <Button variant="ghost" onClick={clearFilters}><X className="h-4 w-4" /> Clear filters</Button>}
+      />
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            placeholder="Filter by expertise (e.g. Machine Learning)"
-            value={filters.expertise}
-            onChange={(e) => setFilters({ ...filters, expertise: e.target.value })}
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          />
+      <Card className="mb-6 p-4 sm:p-5">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1fr_220px]">
+          <label className="relative block">
+            <span className="sr-only">Search expertise</span>
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+            <input
+              value={expertise}
+              onChange={(event) => setExpertise(event.target.value)}
+              placeholder="Expertise, skill, or topic"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            />
+          </label>
+          <label className="relative block">
+            <span className="sr-only">Search company</span>
+            <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+            <input
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              placeholder="Company"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            />
+          </label>
+          <label className="relative block">
+            <span className="sr-only">Availability</span>
+            <SlidersHorizontal className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400" />
+            <select
+              value={availability}
+              onChange={(event) => setAvailability(event.target.value)}
+              className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            >
+              <option value="available">Available now</option>
+              <option value="all">All mentors</option>
+              <option value="unavailable">Currently unavailable</option>
+            </select>
+          </label>
         </div>
-        <div className="relative flex-1">
-          <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            placeholder="Filter by company"
-            value={filters.company}
-            onChange={(e) => setFilters({ ...filters, company: e.target.value })}
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          />
-        </div>
-      </div>
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400"><Sparkles className="h-3.5 w-3.5" /> Searches wait briefly while you type, so the service is not called on every keystroke.</p>
+      </Card>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-              <div className="w-12 h-12 bg-gray-200 rounded-full mb-4" />
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-              <div className="h-3 bg-gray-100 rounded w-1/2" />
-            </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <Card key={item} className="p-5">
+              <div className="flex items-center gap-3"><Skeleton className="h-12 w-12 rounded-2xl" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-1/2" /></div></div>
+              <Skeleton className="mt-5 h-16" />
+              <Skeleton className="mt-4 h-7 w-4/5" />
+            </Card>
           ))}
         </div>
+      ) : error ? (
+        <Card><ErrorState message={error} onRetry={retry} /></Card>
       ) : mentors.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <Star size={48} className="mx-auto mb-4 text-gray-300" />
-          <p className="font-medium">No mentors found</p>
-          <p className="text-sm mt-1">Try adjusting your filters</p>
-        </div>
+        <Card>
+          <EmptyState
+            icon={UsersRound}
+            title="No mentors match these filters"
+            description="Try a broader expertise, remove the company filter, or include mentors who are currently unavailable."
+            action={<Button variant="secondary" onClick={clearFilters}>Reset filters</Button>}
+          />
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mentors.map((mentor) => (
-            <Link
-              key={mentor._id}
-              to={`/mentors/${mentor._id}`}
-              className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md border border-gray-100 transition-all"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold text-lg">
-                  {mentor.userId?.name?.[0] || 'M'}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{mentor.userId?.name}</h3>
-                  <p className="text-xs text-gray-500">{mentor.role} @ {mentor.company}</p>
-                </div>
-              </div>
-              {mentor.expertise?.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {mentor.expertise.slice(0, 3).map((tag) => (
-                    <span key={tag} className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded-full">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <p className="text-gray-600 text-sm line-clamp-2">{mentor.bio}</p>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-gray-400">{mentor.yearsOfExperience}y experience</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${mentor.availability ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                  {mentor.availability ? 'Available' : 'Unavailable'}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-600">{mentors.length} mentor{mentors.length === 1 ? '' : 's'} found</p>
+            <p className="hidden text-xs text-slate-400 sm:block">Showing backend-supported results; pagination is not available yet.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {mentors.map((mentor) => (
+              <Link key={mentor._id} to={`/mentors/${mentor._id}`} className="group rounded-2xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
+                <Card className="flex h-full flex-col p-5 transition duration-200 group-hover:-translate-y-0.5 group-hover:border-blue-200 group-hover:shadow-md">
+                  <div className="flex items-start gap-3">
+                    <Avatar name={mentor.userId?.name} src={mentor.userId?.profilePhoto} size="lg" />
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-base font-extrabold text-slate-950 group-hover:text-blue-700">{mentor.userId?.name || 'Alumni mentor'}</h2>
+                      <p className="mt-1 truncate text-sm text-slate-500">{mentor.role || 'Mentor'}{mentor.company ? ` at ${mentor.company}` : ''}</p>
+                      {mentor.collegeId?.name && <p className="mt-1 truncate text-xs text-slate-400">{mentor.collegeId.name}</p>}
+                    </div>
+                    <Badge tone={mentor.availability ? 'green' : 'slate'}>{mentor.availability ? 'Available' : 'Unavailable'}</Badge>
+                  </div>
+                  <p className="mt-5 line-clamp-3 min-h-[3.75rem] text-sm leading-5 text-slate-600">{mentor.bio || 'Open the profile to learn more about this mentor’s background and focus areas.'}</p>
+                  <div className="mt-4 flex flex-wrap gap-1.5">
+                    {mentor.expertise?.slice(0, 4).map((tag) => <Badge key={tag} tone="blue">{tag}</Badge>)}
+                    {mentor.expertise?.length > 4 && <Badge>+{mentor.expertise.length - 4}</Badge>}
+                  </div>
+                  <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4">
+                    <span className="text-xs font-semibold text-slate-500">{mentor.yearsOfExperience || 0} years experience</span>
+                    <span className="text-xs font-bold text-blue-600">View profile →</span>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

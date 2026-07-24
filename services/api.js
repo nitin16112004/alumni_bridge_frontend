@@ -1,26 +1,38 @@
 import axios from 'axios';
+import { API_URL } from '../config/env';
+import { clearStoredSession, getStoredToken } from './session';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: API_URL,
+  timeout: 60000,
+  headers: { Accept: 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = getStoredToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-const AUTH_URLS = ['/auth/login', '/auth/register', '/auth/register-college'];
+const AUTH_URLS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/register-college',
+  '/auth/send-otp',
+  '/auth/verify-otp',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const url = err.config?.url || '';
     const isAuthEndpoint = AUTH_URLS.some((u) => url.includes(u));
+
     if (err.response?.status === 401 && !isAuthEndpoint) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      clearStoredSession();
+      window.dispatchEvent(new CustomEvent('alumni-bridge:session-expired'));
     }
     return Promise.reject(err);
   }

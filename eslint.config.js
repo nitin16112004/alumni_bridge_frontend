@@ -17,5 +17,10 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Data loaders in this client intentionally initialize loading state from effects.
+      // This React Compiler advisory is not an error for external API synchronization.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

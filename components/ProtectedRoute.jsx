@@ -1,16 +1,19 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import RouteLoader from './common/RouteLoader';
+import { getHomeRoute } from '../utils/routing';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const { user } = useSelector((state) => state.auth);
+  const location = useLocation();
+  const { initialized, isAuthenticated, role } = useSelector((state) => state.auth);
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!initialized) return <RouteLoader label="Restoring your session" />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
 
-  if (allowedRoles) {
-    const role = user.entityType === 'college' ? 'college' : user.role;
-    if (!allowedRoles.includes(role)) {
-      return <Navigate to="/dashboard" replace />;
-    }
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to={getHomeRoute(role)} replace />;
   }
 
   return children;

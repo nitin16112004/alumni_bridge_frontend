@@ -1,90 +1,153 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import api from '../../services/api';
+import { getApiErrorMessage } from '../../services/apiError';
+import {
+  clearStoredSession,
+  loadStoredSession,
+  normalizeAuthPayload,
+  persistSession,
+} from '../../services/session';
 
-export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
-  try {
-    const { data } = await api.post('/auth/login', credentials);
-    localStorage.setItem('token', data.token);
-    const entity = data.entityType === 'college' ? data.college : data.user;
-    localStorage.setItem('user', JSON.stringify({ ...entity, entityType: data.entityType }));
-    return { ...data, entity };
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Login failed');
-  }
-});
+const storedSession = loadStoredSession();
 
-export const registerUser = createAsyncThunk('auth/register', async (data, { rejectWithValue }) => {
-  try {
-    const res = await api.post('/auth/register', data);
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('user', JSON.stringify({ ...res.data.user, entityType: 'user' }));
-    return res.data;
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Registration failed');
-  }
-});
+const createAuthThunk = (type, endpoint, fallbackEntityType, fallbackMessage) =>
+  createAsyncThunk(type, async (payload, { rejectWithValue }) => {
+    try {
+      const { data } = await api.post(endpoint, payload);
+      const session = normalizeAuthPayload(data, fallbackEntityType);
+      persistSession(session);
+      return session;
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, fallbackMessage));
+    }
+  });
 
-export const registerCollege = createAsyncThunk('auth/registerCollege', async (data, { rejectWithValue }) => {
-  try {
-    const res = await api.post('/auth/register-college', data);
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('user', JSON.stringify({ ...res.data.college, entityType: 'college' }));
-    return res.data;
-  } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Registration failed');
-  }
-});
+export const login = createAuthThunk('auth/login', '/auth/login', null, 'Login failed.');
+export const registerUser = createAuthThunk(
+  'auth/register',
+  '/auth/register',
+  'user',
+  'Registration failed.',
+);
+export const registerCollege = createAuthThunk(
+  'auth/registerCollege',
+  '/auth/register-college',
+  'college',
+  'Registration failed.',
+);
 
-const storedUser = localStorage.getItem('user');
+export const restoreSession = createAsyncThunk(
+  'auth/restoreSession',
+  async (_, { rejectWithValue }) => {
+    const sessionToRestore = loadStoredSession();
+    if (!sessionToRestore?.token) return null;
+    try {
+      const { data } = await api.get('/auth/me');
+      const session = normalizeAuthPayload(
+        { ...data, token: sessionToRestore.token },
+        sessionToRestore.entityType,
+      );
+      persistSession(session);
+      return session;
+    } catch (error) {
+      clearStoredSession();
+      return rejectWithValue(getApiErrorMessage(error, 'Your session could not be restored.'));
+    }
+  },
+);
+
+const emptySession = {
+  token: null,
+  entityType: null,
+  user: null,
+  college: null,
+  currentEntity: null,
+  role: null,
+};
 
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: storedUser ? JSON.parse(storedUser) : null,
-    token: localStorage.getItem('token') || null,
+    ...emptySession,
+    ...(storedSession || {}),
+    isAuthenticated: Boolean(storedSession?.token),
     loading: false,
+    restoring: Boolean(storedSession?.token),
+    initialized: !storedSession?.token,
     error: null,
   },
   reducers: {
     logout(state) {
-      state.user = null;
-      state.token = null;
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      Object.assign(state, emptySession, {
+        isAuthenticated: false,
+        loading: false,
+        restoring: false,
+        initialized: true,
+        error: null,
+      });
+      clearStoredSession();
     },
     clearError(state) {
       state.error = null;
     },
-    updateUser(state, action) {
-      state.user = { ...state.user, ...action.payload };
-      localStorage.setItem('user', JSON.stringify(state.user));
+    updateCurrentEntity(state, action) {
+      if (state.entityType === 'college') {
+        state.college = { ...state.college, ...action.payload };
+        state.currentEntity = state.college;
+      } else {
+        state.user = { ...state.user, ...action.payload };
+        state.currentEntity = state.user;
+      }
+      persistSession(state);
     },
   },
   extraReducers: (builder) => {
+    const authThunks = [login, registerUser, registerCollege];
+    authThunks.forEach((thunk) => {
+      builder
+        .addCase(thunk.pending, (state) => {
+          state.loading = true;
+          state.error = null;
+        })
+        .addCase(thunk.fulfilled, (state, action) => {
+          Object.assign(state, action.payload, {
+            loading: false,
+            restoring: false,
+            initialized: true,
+            isAuthenticated: true,
+            error: null,
+          });
+        })
+        .addCase(thunk.rejected, (state, action) => {
+          state.loading = false;
+          state.error = action.payload;
+        });
+    });
+
     builder
-      .addCase(login.pending, (s) => { s.loading = true; s.error = null; })
-      .addCase(login.fulfilled, (s, a) => {
-        s.loading = false;
-        s.token = a.payload.token;
-        s.user = { ...a.payload.entity, entityType: a.payload.entityType };
+      .addCase(restoreSession.pending, (state) => {
+        state.restoring = true;
       })
-      .addCase(login.rejected, (s, a) => { s.loading = false; s.error = a.payload; })
-      .addCase(registerUser.pending, (s) => { s.loading = true; s.error = null; })
-      .addCase(registerUser.fulfilled, (s, a) => {
-        s.loading = false;
-        s.token = a.payload.token;
-        s.user = { ...a.payload.user, entityType: 'user' };
+      .addCase(restoreSession.fulfilled, (state, action) => {
+        if (action.payload) {
+          Object.assign(state, action.payload, { isAuthenticated: true });
+        } else {
+          Object.assign(state, emptySession, { isAuthenticated: false });
+        }
+        state.restoring = false;
+        state.initialized = true;
       })
-      .addCase(registerUser.rejected, (s, a) => { s.loading = false; s.error = a.payload; })
-      .addCase(registerCollege.pending, (s) => { s.loading = true; s.error = null; })
-      .addCase(registerCollege.fulfilled, (s, a) => {
-        s.loading = false;
-        s.token = a.payload.token;
-        s.user = { ...a.payload.college, entityType: 'college' };
-      })
-      .addCase(registerCollege.rejected, (s, a) => { s.loading = false; s.error = a.payload; });
+      .addCase(restoreSession.rejected, (state) => {
+        Object.assign(state, emptySession, {
+          isAuthenticated: false,
+          restoring: false,
+          initialized: true,
+          error: null,
+        });
+      });
   },
 });
 
-export const { logout, clearError, updateUser } = authSlice.actions;
+export const { logout, clearError, updateCurrentEntity } = authSlice.actions;
+export const updateUser = updateCurrentEntity;
 export default authSlice.reducer;
