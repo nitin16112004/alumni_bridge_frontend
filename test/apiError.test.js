@@ -1,29 +1,17 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { getApiErrorMessage } from '../services/apiError.js';
+import { describe, expect, it } from 'vitest';
+import { getApiErrorMessage, normalizeApiError } from '../services/apiError';
 
-test('uses safe backend validation and duplicate messages', () => {
-  assert.equal(
-    getApiErrorMessage({ response: { status: 409, data: { message: 'Email already registered' } } }),
-    'Email already registered',
-  );
-});
+describe('API error normalization', () => {
+  it('preserves safe validation, forbidden, and conflict messages', () => {
+    expect(getApiErrorMessage({ response: { status: 400, data: { message: 'Email already registered' } } })).toBe('Email already registered');
+    expect(normalizeApiError({ response: { status: 403, data: { message: 'Access denied' } } }).kind).toBe('forbidden');
+    expect(normalizeApiError({ response: { status: 409, data: { message: 'Already registered' } } }).kind).toBe('conflict');
+  });
 
-test('distinguishes rate limits, timeouts, network errors, and server errors', () => {
-  assert.equal(
-    getApiErrorMessage({ response: { status: 429, data: {} } }),
-    'Too many registration attempts. Please wait and try again.',
-  );
-  assert.equal(
-    getApiErrorMessage({ code: 'ECONNABORTED' }),
-    'The server took too long to respond. Please try again.',
-  );
-  assert.equal(
-    getApiErrorMessage({ code: 'ERR_NETWORK' }),
-    'Unable to connect to the server. Check the backend URL or CORS configuration.',
-  );
-  assert.equal(
-    getApiErrorMessage({ response: { status: 500, data: { message: 'database stack details' } } }),
-    'The server is temporarily unavailable. Please try again shortly.',
-  );
+  it('distinguishes rate limits, timeouts, network failures, and server errors', () => {
+    expect(getApiErrorMessage({ response: { status: 429, data: {} } })).toBe('Too many requests. Please wait a moment and try again.');
+    expect(normalizeApiError({ code: 'ECONNABORTED' }).kind).toBe('timeout');
+    expect(normalizeApiError({ code: 'ERR_NETWORK' }).kind).toBe('network');
+    expect(getApiErrorMessage({ response: { status: 500, data: { message: 'database stack details' } } })).toBe('The server is temporarily unavailable. Please try again shortly.');
+  });
 });
