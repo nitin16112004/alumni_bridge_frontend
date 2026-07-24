@@ -26,7 +26,7 @@ export default function Login() {
     dispatch(clearError());
     const result = await dispatch(login({ ...form, email: form.email.trim().toLowerCase() }));
     if (login.fulfilled.match(result)) {
-      const role = result.payload.entityType === 'college' ? 'college' : result.payload.entity?.role;
+      const role = result.payload.role;
       if (role === 'college') navigate('/college/dashboard');
       else if (role === 'alumni') navigate('/alumni/dashboard');
       else navigate('/dashboard');

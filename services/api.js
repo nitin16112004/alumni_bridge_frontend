@@ -1,14 +1,15 @@
 import axios from 'axios';
-import { API_URL } from '../config/runtime';
+import { API_URL } from '../config/env';
+import { clearStoredSession, getStoredToken } from './session';
 
 const api = axios.create({
   baseURL: API_URL,
-  // Render free instances can take roughly 45 seconds to wake from a cold start.
   timeout: 60000,
+  headers: { Accept: 'application/json' },
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = getStoredToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -29,20 +30,9 @@ api.interceptors.response.use(
     const url = err.config?.url || '';
     const isAuthEndpoint = AUTH_URLS.some((u) => url.includes(u));
 
-    if (import.meta.env.DEV) {
-      console.error('API request failed', {
-        url: `${err.config?.baseURL || ''}${url}`,
-        method: err.config?.method?.toUpperCase(),
-        status: err.response?.status,
-        response: err.response?.data,
-        code: err.code,
-      });
-    }
-
     if (err.response?.status === 401 && !isAuthEndpoint) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      clearStoredSession();
+      window.dispatchEvent(new CustomEvent('alumni-bridge:session-expired'));
     }
     return Promise.reject(err);
   }

@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { CalendarDays, Globe2, Mail, School, UserRound } from 'lucide-react';
 import { registerUser, registerCollege, clearError } from '../../store/slices/authSlice';
 import api from '../../services/api';
+import { buildRegistrationRequest } from '../../services/authPayload';
 import AuthLayout from '../../components/auth/AuthLayout';
 import RoleSelector from '../../components/auth/RoleSelector';
 import Alert from '../../components/ui/Alert';
@@ -65,22 +66,10 @@ export default function Register() {
     let result;
     try {
       if (form.entityType === 'college') {
-        result = await dispatch(registerCollege({
-          name,
-          email,
-          password: form.password,
-          domain: form.domain.trim().toLowerCase(),
-        }));
+        result = await dispatch(registerCollege(buildRegistrationRequest({ ...form, name, email }).payload));
         if (registerCollege.fulfilled.match(result)) navigate('/college/dashboard');
       } else {
-        result = await dispatch(registerUser({
-          name,
-          email,
-          password: form.password,
-          role: form.entityType,
-          collegeId: form.collegeId || undefined,
-          graduationYear: form.entityType === 'alumni' ? Number(form.graduationYear) : undefined,
-        }));
+        result = await dispatch(registerUser(buildRegistrationRequest({ ...form, name, email }).payload));
         if (registerUser.fulfilled.match(result)) {
           navigate(form.entityType === 'alumni' ? '/alumni/dashboard' : '/dashboard');
         }
