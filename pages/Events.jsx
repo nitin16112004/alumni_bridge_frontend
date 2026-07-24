@@ -1,215 +1,203 @@
-import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import {
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  MapPin,
+  Plus,
+  School,
+  UsersRound,
+} from 'lucide-react';
+import { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import api from '../services/api';
-import { CalendarDays, MapPin, Plus, X, Users, CheckCircle, ChevronRight } from 'lucide-react';
+import { getApiErrorMessage } from '../services/apiError';
+import { addToast } from '../store/slices/toastSlice';
+import useApiResource from '../hooks/useApiResource';
+import PageHeader from '../components/common/PageHeader';
+import Avatar from '../components/ui/Avatar';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import EmptyState from '../components/ui/EmptyState';
+import ErrorState from '../components/ui/ErrorState';
+import Modal from '../components/ui/Modal';
+import Skeleton from '../components/ui/Skeleton';
 
-function EventModal({ event, user, onClose, onRegister, registering }) {
-  if (!event) return null;
-  const isPast = new Date(event.date) < new Date();
-  const isRegistered = event.registrations?.some((r) => String(r) === String(user?._id));
+const emptyForm = { title: '', description: '', date: '', location: '' };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900 pr-4">{event.title}</h2>
-            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors shrink-0">
-              <X size={18} className="text-gray-500" />
-            </button>
-          </div>
-
-          <div className="space-y-2 mb-4">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <CalendarDays size={15} className="text-blue-500" />
-              {new Date(event.date).toLocaleString('en-IN', { dateStyle: 'full', timeStyle: 'short' })}
-              {isPast && <span className="text-xs text-red-500 font-medium">(Past)</span>}
-            </div>
-            {event.location && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <MapPin size={15} className="text-blue-500" /> {event.location}
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Users size={15} className="text-blue-500" /> {event.registrations?.length || 0} registered
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <h3 className="font-medium text-gray-800 mb-2 text-sm">About this event</h3>
-            <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{event.description}</p>
-          </div>
-
-          <p className="text-xs text-gray-400 mb-4">Organized by {event.organizer?.name}</p>
-
-          {user?.role === 'student' && !isPast && (
-            isRegistered ? (
-              <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 py-2.5 rounded-xl text-sm font-medium">
-                <CheckCircle size={16} /> You're registered
-              </div>
-            ) : (
-              <button
-                onClick={() => onRegister(event._id)}
-                disabled={registering === event._id}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50"
-              >
-                {registering === event._id ? 'Registering...' : 'Register for Event'}
-              </button>
-            )
-          )}
-          {isPast && (
-            <div className="bg-gray-50 rounded-xl p-3 text-center text-sm text-gray-500">
-              This event has already taken place.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function organizerName(event) {
+  return event.organizer?.name || event.organizer?.institutionName || 'Alumni Bridge community';
 }
 
 export default function Events() {
-  const { user } = useSelector((s) => s.auth);
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [form, setForm] = useState({ title: '', description: '', date: '', location: '' });
-  const [registering, setRegistering] = useState(null);
+  const dispatch = useDispatch();
+  const { user, currentEntity, role } = useSelector((state) => state.auth);
+  const collegeId = role === 'college'
+    ? currentEntity?._id
+    : typeof user?.collegeId === 'object' ? user.collegeId?._id : user?.collegeId;
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [registering, setRegistering] = useState('');
+  const [actionError, setActionError] = useState('');
 
-  const loadEvents = () => {
-    const params = user?.collegeId ? `?collegeId=${user.collegeId}` : '';
-    api.get(`/events${params}`).then((r) => setEvents(r.data)).catch(() => {}).finally(() => setLoading(false));
-  };
+  const { data: events = [], setData: setEvents, loading, error, retry } = useApiResource(
+    async () => (await api.get('/events', { params: collegeId ? { collegeId } : {} })).data,
+    [collegeId],
+  );
 
-  useEffect(() => { loadEvents(); }, []);
+  const now = new Date();
+  const upcoming = (events || []).filter((event) => new Date(event.date) >= now);
+  const past = (events || []).filter((event) => new Date(event.date) < now).reverse();
+  const canCreate = role === 'alumni' && user?.isApproved;
+  const isRegistered = (event) => event.registrations?.some((registration) => String(registration?._id || registration) === String(user?._id));
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
+    if (new Date(form.date) <= new Date()) {
+      setFormError('Choose a future date and time.');
+      return;
+    }
+    if (form.description.trim().length < 20) {
+      setFormError('Add a description of at least 20 characters.');
+      return;
+    }
     setSubmitting(true);
     setFormError('');
     try {
-      await api.post('/events', form);
-      setShowForm(false);
-      setForm({ title: '', description: '', date: '', location: '' });
-      loadEvents();
-    } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to create event');
+      const { data: created } = await api.post('/events', {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        date: new Date(form.date).toISOString(),
+        location: form.location.trim(),
+      });
+      setEvents((current) => [...current, { ...created, organizer: user, registrations: [] }].sort((a, b) => new Date(a.date) - new Date(b.date)));
+      setForm(emptyForm);
+      setEditorOpen(false);
+      dispatch(addToast({ type: 'event', message: 'Event created.' }));
+    } catch (requestError) {
+      setFormError(getApiErrorMessage(requestError, 'The event could not be created.'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const register = async (id) => {
-    setRegistering(id);
+  const register = async (event) => {
+    setRegistering(event._id);
+    setActionError('');
     try {
-      await api.post(`/events/${id}/register`);
-      loadEvents();
-      setSelectedEvent((prev) => prev ? { ...prev, registrations: [...(prev.registrations || []), user._id] } : prev);
-    } catch {
-      loadEvents();
+      await api.post(`/events/${event._id}/register`);
+      const registrations = [...(event.registrations || []), user._id];
+      setEvents((current) => current.map((item) => item._id === event._id ? { ...item, registrations } : item));
+      setSelectedEvent((current) => current?._id === event._id ? { ...current, registrations } : current);
+      dispatch(addToast({ type: 'event', message: 'You’re registered for the event.' }));
+    } catch (requestError) {
+      setActionError(getApiErrorMessage(requestError, 'Event registration failed.'));
     } finally {
-      setRegistering(null);
+      setRegistering('');
     }
   };
 
-  const isRegistered = (event) => event.registrations?.some((r) => String(r) === String(user?._id));
+  const eventCards = (items, isPast = false) => (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {items.map((event) => (
+        <button key={event._id} type="button" onClick={() => { setSelectedEvent(event); setActionError(''); }} className="group rounded-2xl text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100">
+          <Card className={`h-full overflow-hidden transition duration-200 group-hover:-translate-y-0.5 group-hover:border-blue-200 group-hover:shadow-md ${isPast ? 'opacity-80' : ''}`}>
+            <div className="h-2 bg-gradient-to-r from-blue-600 to-indigo-500" />
+            <div className="p-5">
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                  <span className="text-[9px] font-bold uppercase">{new Date(event.date).toLocaleDateString(undefined, { month: 'short' })}</span>
+                  <span className="text-base font-extrabold">{new Date(event.date).getDate()}</span>
+                </span>
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  {isPast && <Badge>Past</Badge>}
+                  {!isPast && role === 'student' && isRegistered(event) && <Badge tone="green"><CheckCircle2 className="h-3 w-3" /> Registered</Badge>}
+                </div>
+              </div>
+              <h3 className="mt-4 line-clamp-2 text-base font-extrabold text-slate-950 group-hover:text-blue-700">{event.title}</h3>
+              <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">{event.description}</p>
+              <div className="mt-4 space-y-2 text-xs text-slate-500">
+                <p className="flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-slate-400" /> {new Date(event.date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                <p className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-slate-400" /> {event.location || 'Location to be announced'}</p>
+                <p className="flex items-center gap-2"><UsersRound className="h-3.5 w-3.5 text-slate-400" /> {event.registrations?.length || 0} registered</p>
+              </div>
+            </div>
+          </Card>
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Events</h1>
-          <p className="text-gray-500 text-sm">Upcoming alumni and college events</p>
-        </div>
-        {(user?.role === 'alumni' || user?.entityType === 'college') && user?.isApproved && (
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            {showForm ? <X size={14} /> : <Plus size={14} />}
-            {showForm ? 'Cancel' : 'Create Event'}
-          </button>
-        )}
-      </div>
+    <div className="page-container max-w-7xl">
+      <PageHeader
+        eyebrow="Community calendar"
+        title="Events"
+        description="Discover upcoming gatherings, learning sessions, and alumni conversations from your institution."
+        actions={canCreate && <Button onClick={() => { setFormError(''); setEditorOpen(true); }}><Plus className="h-4 w-4" /> Create event</Button>}
+      />
 
-      {showForm && (
-        <form onSubmit={submit} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6 space-y-3">
-          <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Event Title" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required rows={3} placeholder="Event description" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none" />
-          <div className="grid grid-cols-2 gap-3">
-            <input type="datetime-local" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-            <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Location (optional)" className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+      {role === 'college' && (
+        <Card className="mb-6 border-indigo-200 bg-indigo-50/70 p-4">
+          <div className="flex items-start gap-3">
+            <School className="mt-0.5 h-5 w-5 text-indigo-600" />
+            <p className="text-sm leading-6 text-indigo-800">College event creation is not exposed because the current backend controller requires a User organizer. Institution events already associated with your college remain available here.</p>
           </div>
-          {formError && <p className="text-red-500 text-sm">{formError}</p>}
-          <button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg disabled:opacity-50">
-            {submitting ? 'Creating...' : 'Create Event'}
-          </button>
-        </form>
+        </Card>
       )}
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="bg-white rounded-xl p-6 border border-gray-100 animate-pulse h-40" />)}
-        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2, 3, 4, 5].map((item) => <Card key={item} className="p-5"><Skeleton className="h-12 w-12" /><Skeleton className="mt-4 h-5 w-2/3" /><Skeleton className="mt-3 h-14" /></Card>)}</div>
+      ) : error ? (
+        <Card><ErrorState message={error} onRetry={retry} /></Card>
       ) : events.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <CalendarDays size={48} className="mx-auto mb-3 text-gray-200" />
-          <p className="font-medium">No events scheduled</p>
-        </div>
+        <Card><EmptyState icon={CalendarDays} title="No events scheduled" description="Community events associated with your college will appear here." action={canCreate && <Button onClick={() => setEditorOpen(true)}><Plus className="h-4 w-4" /> Create the first event</Button>} /></Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {events.map((event) => {
-            const isPast = new Date(event.date) < new Date();
-            return (
-              <button
-                key={event._id}
-                onClick={() => setSelectedEvent(event)}
-                className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all text-left group"
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-1">{event.title}</h3>
-                  <ChevronRight size={16} className="text-gray-400 group-hover:text-blue-500 transition-colors shrink-0 ml-2 mt-0.5" />
-                </div>
-                <p className="text-gray-500 text-sm line-clamp-2 mb-3">{event.description}</p>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <CalendarDays size={12} />
-                    {new Date(event.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {isPast && <span className="text-red-400">(Past)</span>}
-                  </div>
-                  {event.location && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <MapPin size={12} /> {event.location}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Users size={12} /> {event.registrations?.length || 0} registered
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-xs text-gray-400">By {event.organizer?.name}</span>
-                  {user?.role === 'student' && !isPast && (
-                    isRegistered(event)
-                      ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle size={10} /> Registered</span>
-                      : <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Click to register</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+        <div className="space-y-9">
+          <section>
+            <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-extrabold text-slate-950">Upcoming events</h2><Badge tone="blue">{upcoming.length}</Badge></div>
+            {upcoming.length ? eventCards(upcoming) : <Card><EmptyState compact icon={CalendarDays} title="Nothing upcoming" description="Past events remain available below." /></Card>}
+          </section>
+          {past.length > 0 && <section><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-extrabold text-slate-950">Past events</h2><Badge>{past.length}</Badge></div>{eventCards(past, true)}</section>}
         </div>
       )}
 
-      <EventModal
-        event={selectedEvent}
-        user={user}
-        onClose={() => setSelectedEvent(null)}
-        onRegister={register}
-        registering={registering}
-      />
+      <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent?.title} description={selectedEvent ? `Organized by ${organizerName(selectedEvent)}` : ''}>
+        {selectedEvent && (
+          <div>
+            <div className="space-y-2 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-blue-600" /> {new Date(selectedEvent.date).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}</p>
+              <p className="flex items-center gap-2"><MapPin className="h-4 w-4 text-blue-600" /> {selectedEvent.location || 'Location to be announced'}</p>
+              <p className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-blue-600" /> {selectedEvent.registrations?.length || 0} registered</p>
+            </div>
+            <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-slate-600">{selectedEvent.description}</p>
+            <div className="mt-6 flex items-center gap-3"><Avatar name={organizerName(selectedEvent)} src={selectedEvent.organizer?.profilePhoto} size="md" /><div><p className="text-sm font-bold text-slate-800">{organizerName(selectedEvent)}</p><p className="text-xs text-slate-500">Event organizer</p></div></div>
+            {actionError && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{actionError}</div>}
+            {role === 'student' && new Date(selectedEvent.date) >= new Date() && (
+              isRegistered(selectedEvent)
+                ? <div className="mt-6 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> You’re registered</div>
+                : <Button className="mt-6 w-full" onClick={() => register(selectedEvent)} loading={registering === selectedEvent._id}>Register for event</Button>
+            )}
+            {new Date(selectedEvent.date) < new Date() && <div className="mt-6 rounded-xl bg-slate-100 p-3 text-center text-sm font-semibold text-slate-500">This event has already taken place.</div>}
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title="Create an event" description="Events are visible to members associated with your college.">
+        <form onSubmit={submit} className="space-y-4">
+          <label><span className="mb-2 block text-sm font-bold text-slate-700">Event title</span><input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+          <label><span className="mb-2 block text-sm font-bold text-slate-700">Description</span><textarea required rows="5" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label><span className="mb-2 block text-sm font-bold text-slate-700">Date and time</span><input required type="datetime-local" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+            <label><span className="mb-2 block text-sm font-bold text-slate-700">Location</span><input value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="Room, campus, or online" className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+          </div>
+          {formError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{formError}</div>}
+          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setEditorOpen(false)}>Cancel</Button><Button type="submit" loading={submitting}>Create event</Button></div>
+        </form>
+      </Modal>
     </div>
   );
 }

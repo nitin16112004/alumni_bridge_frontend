@@ -1,99 +1,97 @@
-import { useState, useEffect } from 'react';
+import { ArrowRight, Clock3, MessageCircleMore, RotateCcw, UserCheck } from 'lucide-react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { MessageSquare, RotateCcw } from 'lucide-react';
+import { getApiErrorMessage } from '../../services/apiError';
+import useApiResource from '../../hooks/useApiResource';
+import PageHeader from '../../components/common/PageHeader';
+import Avatar from '../../components/ui/Avatar';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import ErrorState from '../../components/ui/ErrorState';
+import Skeleton from '../../components/ui/Skeleton';
 
-const statusColors = {
-  pending: 'bg-amber-100 text-amber-700',
-  accepted: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
-};
+const statusTone = { pending: 'amber', accepted: 'green', rejected: 'red' };
 
 export default function MyRequests() {
   const navigate = useNavigate();
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [chatLoading, setChatLoading] = useState(null);
-
-  useEffect(() => {
-    api.get('/mentorship/sent')
-      .then((r) => setRequests(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const [actionError, setActionError] = useState('');
+  const { data: requests = [], loading, error, retry } = useApiResource(
+    async () => (await api.get('/mentorship/sent')).data,
+    [],
+  );
 
   const startChat = async (mentorUserId, requestId) => {
     setChatLoading(requestId);
+    setActionError('');
     try {
       await api.post('/chat/conversations', { participantId: mentorUserId });
       navigate('/chat');
-    } catch {
-      navigate('/chat');
+    } catch (requestError) {
+      setActionError(getApiErrorMessage(requestError, 'The conversation could not be opened.'));
     } finally {
       setChatLoading(null);
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading...</div>;
-
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">My Mentorship Requests</h1>
-        <Link to="/mentors" className="text-sm text-blue-600 hover:underline">Browse mentors →</Link>
-      </div>
-      {requests.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="font-medium">No requests yet</p>
-          <Link to="/mentors" className="text-blue-600 hover:underline text-sm mt-2 block">Find a mentor →</Link>
-        </div>
+    <div className="page-container max-w-5xl">
+      <PageHeader
+        eyebrow="Mentorship"
+        title="Your mentorship requests"
+        description="Track every introduction and continue conversations after a mentor accepts."
+        actions={<Link to="/mentors" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700">Find mentors <ArrowRight className="h-4 w-4" /></Link>}
+      />
+
+      {actionError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{actionError}</div>}
+
+      {loading ? (
+        <div className="space-y-4">{[0, 1, 2].map((item) => <Card key={item} className="p-5"><div className="flex gap-3"><Skeleton className="h-12 w-12" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-44" /><Skeleton className="h-3 w-28" /></div></div><Skeleton className="mt-4 h-14" /></Card>)}</div>
+      ) : error ? (
+        <Card><ErrorState message={error} onRetry={retry} /></Card>
+      ) : requests.length === 0 ? (
+        <Card>
+          <EmptyState icon={UserCheck} title="You haven’t requested mentorship yet" description="Browse alumni profiles and send a thoughtful introduction when you find the right match." action={<Link to="/mentors" className="inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-4 text-sm font-bold text-white">Browse mentors</Link>} />
+        </Card>
       ) : (
         <div className="space-y-4">
-          {requests.map((req) => (
-            <div key={req._id} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    {req.mentorId?.userId?.name || 'Mentor'}
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {req.mentorId?.role} @ {req.mentorId?.company}
-                  </p>
+          {requests.map((request) => {
+            const mentor = request.mentorId;
+            const mentorUser = mentor?.userId;
+            return (
+              <Card key={request._id} className="p-5 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <Avatar name={mentorUser?.name} src={mentorUser?.profilePhoto} size="lg" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-extrabold text-slate-950">{mentorUser?.name || 'Alumni mentor'}</h2>
+                      <Badge tone={statusTone[request.status]}>{request.status}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">{mentor?.role || 'Mentor'}{mentor?.company ? ` at ${mentor.company}` : ''}</p>
+                    <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400"><Clock3 className="h-3.5 w-3.5" /> Sent {new Date(request.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {request.status === 'accepted' && mentorUser?._id && (
+                      <Button onClick={() => startChat(mentorUser._id, request._id)} loading={chatLoading === request._id}>
+                        <MessageCircleMore className="h-4 w-4" /> Message mentor
+                      </Button>
+                    )}
+                    {request.status === 'rejected' && mentor?._id && (
+                      <Link to={`/mentors/${mentor._id}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                        <RotateCcw className="h-4 w-4" /> Request again
+                      </Link>
+                    )}
+                  </div>
                 </div>
-                <span className={`text-xs px-3 py-1 rounded-full font-medium shrink-0 ${statusColors[req.status]}`}>
-                  {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
-                </span>
-              </div>
-
-              {req.message && (
-                <p className="text-sm text-gray-600 mt-3 bg-gray-50 rounded-lg p-3">{req.message}</p>
-              )}
-
-              <div className="flex items-center justify-between mt-4">
-                <p className="text-xs text-gray-400">{new Date(req.createdAt).toLocaleDateString()}</p>
-                <div className="flex gap-2">
-                  {req.status === 'accepted' && req.mentorId?.userId?._id && (
-                    <button
-                      onClick={() => startChat(req.mentorId.userId._id, req._id)}
-                      disabled={chatLoading === req._id}
-                      className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      <MessageSquare size={13} />
-                      {chatLoading === req._id ? 'Opening...' : 'Message Mentor'}
-                    </button>
-                  )}
-                  {req.status === 'rejected' && (
-                    <Link
-                      to={`/mentors/${req.mentorId?._id}`}
-                      className="flex items-center gap-1.5 text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      <RotateCcw size={13} /> Send Again
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+                {request.message && (
+                  <blockquote className="mt-4 rounded-xl border-l-4 border-indigo-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">“{request.message}”</blockquote>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
